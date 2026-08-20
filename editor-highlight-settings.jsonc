@@ -1,0 +1,41 @@
+// Editor-side companion to this extension.
+//
+// The extension itself only colors [oz[ ... ]oz] in the Markdown PREVIEW.
+// This block colors the same markers in the Markdown SOURCE, which is where
+// the replies actually get typed. It needs the Highlight extension:
+//
+//     code --install-extension fabiospampinato.vscode-highlight
+//
+// Paste into VS Code user settings (Ctrl+Shift+P -> "Preferences: Open User
+// Settings (JSON)"). Already installed on Oz's machine as of 2026-08-19.
+//
+// ---------------------------------------------------------------------------
+// About the convention
+// ---------------------------------------------------------------------------
+// Oz reviews long documents by answering inline, in the same file, wrapping his
+// replies in [oz[ ... ]oz]. Several Claude Code skills depend on this — most
+// notably /extensive-feedback, which runs a multi-round file-based Q&A where
+// Claude writes numbered questions into a scratch doc and Oz answers under each
+// one inside these markers. The markers are asymmetric so they stay greppable
+// and never collide with real Markdown syntax.
+//
+// The three `decorations` entries map to the three capture groups: opening
+// marker, reply body, closing marker. Markers are dimmed so the eye lands on
+// the reply text rather than on the punctuation.
+//
+// `[\s\S]*?` rather than `.*?` so a reply spanning several lines still matches;
+// lazy so two adjacent replies don't merge into one run.
+
+{
+  "highlight.regexFlags": "gi",
+  "highlight.regexes": {
+    "(\\[oz\\[)([\\s\\S]*?)(\\]oz\\])": {
+      "filterLanguageRegex": "markdown",
+      "decorations": [
+        { "color": "#f0a55899", "fontWeight": "bold" },
+        { "color": "#f0a558" },
+        { "color": "#f0a55899", "fontWeight": "bold" }
+      ]
+    }
+  }
+}
