@@ -1,7 +1,7 @@
 # Getting started with Marker Highlights
 
 This is a small VS Code add-on. It colors reviewer comments written in
-Markdown files — like `[dave[ looks good to me ]dave]` — so it's easy to
+Markdown files — like `[gandalf[ looks good to me ]gandalf]` — so it's easy to
 tell people's comments apart from the document itself, and from each other.
 It works both in the normal editing view and in VS Code's preview pane.
 
@@ -41,12 +41,12 @@ entry):
 
 ```json
 "markerHighlight.markers": [
-  { "tag": "dave", "color": "#B2EC5D", "label": "Dave" },
+  { "tag": "gandalf", "color": "#B2EC5D", "label": "Gandalf" },
   { "tag": "claude", "color": "#f0a558", "label": "Claude" }
 ]
 ```
 
-Replace `"dave"` with your own handle — your first name or initials work
+Replace `"gandalf"` with your own handle — your first name or initials work
 well. Keep it short, one word, no spaces or brackets.
 
 - Your own marker: suggested color **Inchworm green**, `#B2EC5D`.
@@ -66,7 +66,7 @@ within about a second, and the preview picks it up the next time it renders.
 Wrap a comment in your tag, opened and closed the same way on both ends:
 
 ```markdown
-[dave[ this section needs another pass before we ship it ]dave]
+[gandalf[ this section needs another pass before we ship it ]gandalf]
 ```
 
 That's it — it'll show up colored (with your label, if you set one) in both
