@@ -1,11 +1,12 @@
 {
-  "name": "oz-markers",
-  "displayName": "Oz Markers",
-  "description": "Renders [oz[ ... ]oz] feedback markers in the Markdown preview with distinct highlighting.",
-  "version": "1.1.0",
+  "name": "marker-highlights",
+  "displayName": "Marker Highlights",
+  "description": "Highlights configurable [tag[ ... ]tag] inline/zone markers in the Markdown preview, with one color per tag.",
+  "version": "2.0.0",
   "publisher": "oz",
+  "author": "David E. Osorio",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/oz-gh-grl/vscode-oz-markers" },
+  "repository": { "type": "git", "url": "https://github.com/oz-gh-grl/vscode-marker-highlights" },
   "private": true,
   "engines": { "vscode": "^1.70.0" },
   "categories": ["Other"],
@@ -13,6 +14,32 @@
   "activationEvents": [],
   "contributes": {
     "markdown.markdownItPlugins": true,
-    "markdown.previewStyles": ["./media/oz.css"]
+    "markdown.previewStyles": ["./media/markers.css"],
+    "configuration": {
+      "title": "Marker Highlights",
+      "properties": {
+        "markerHighlight.markers": {
+          "type": "array",
+          "markdownDescription": "Reviewer markers to highlight in the Markdown preview. Each entry's `tag` matches `[tag[ ... ]tag]` in the document; `color` is any CSS color. Multiple entries can be active at once, e.g. one per reviewer.",
+          "items": {
+            "type": "object",
+            "required": ["tag", "color"],
+            "properties": {
+              "tag": {
+                "type": "string",
+                "description": "The marker's tag, e.g. \"steve\" for [steve[ ... ]steve]."
+              },
+              "color": {
+                "type": "string",
+                "description": "CSS color used to highlight this tag's markers, e.g. \"#f0a558\"."
+              }
+            }
+          },
+          "default": [
+            { "tag": "comment", "color": "#f0a558" }
+          ]
+        }
+      }
+    }
   }
 }

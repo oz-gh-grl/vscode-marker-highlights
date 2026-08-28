@@ -1,0 +1,87 @@
+/*
+ * Styling for configurable `[tag[ ... ]tag]` markers in the Markdown preview.
+ *
+ * See extension.js for the convention itself: markers wrap a reviewer's own
+ * reply written inline into a document under review, a pattern used by
+ * skills like /extensive-feedback. The point of the color is to separate
+ * "what the reviewer wrote back" from "what the document already said" at a
+ * glance — and, when several people mark up the same document, to tell each
+ * reviewer's replies apart by color.
+ *
+ * The actual color per tag is user-configured (`markerHighlight.markers` in
+ * settings), not known at authoring time, so it travels as inline CSS custom
+ * properties (--marker-fg / --marker-rule / --marker-wash) set by
+ * extension.js on each tagged element. This stylesheet just consumes them,
+ * with a neutral fallback for any element that somehow lacks them.
+ *
+ * Two shapes:
+ *   .marker-note — an inline span, reply sits inside one paragraph
+ *   .marker-zone — a whole block, reply runs across several paragraphs
+ */
+
+.marker-note,
+.marker-zone {
+  color: var(--marker-fg, #f0a558);
+}
+
+/* Keep the color on nested inline markup so a bolded or linked phrase
+   inside a reply doesn't snap back to the body text color. */
+.marker-note *,
+.marker-zone > *,
+.marker-zone strong,
+.marker-zone em,
+.marker-zone li {
+  color: inherit;
+}
+
+/* Block-scale replies get a margin rule so a long one stays obvious
+   when the opening marker has scrolled off the top of the pane. */
+.marker-zone {
+  border-left: 3px solid var(--marker-rule, #f0a55899);
+  background: var(--marker-wash, #f0a55814);
+  padding: 0.15em 0 0.15em 0.75em;
+  margin-left: -0.75em;
+}
+
+/* Code spans inside a reply keep their own background, but pick up the
+   accent so they still read as part of the reply text. */
+.marker-note code,
+.marker-zone code {
+  color: var(--marker-fg, #f0a558);
+}
+
+/* List items inherit the zone class from the core rule, but the <ul>/<ol>
+   around them already carries the rule — don't draw it twice. */
+li.marker-zone {
+  border-left: none;
+  background: none;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+/* The `padding` shorthand on .marker-zone above resets padding-left to
+   0.75em. For a list that is wrong: bullets are laid out `outside` the
+   content box, inside the element's left padding, so 0.75em pushes them
+   onto the rule. Give lists the 0.75em gap PLUS the ~2em the markers need to
+   sit in. */
+ul.marker-zone,
+ol.marker-zone {
+  padding-left: 2.75em;
+}
+
+/* An empty prompt — `[tag[ ]tag]` — wraps only whitespace, so without help
+   it renders as nothing at all in the preview. It's the marker that matters
+   most (it's the one still awaiting an answer), so draw it explicitly.
+   extension.js sets data-empty-text to the actual configured tag text. */
+.marker-empty::before {
+  content: attr(data-empty-text);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0.1em 0.5em;
+  border: 1px dashed var(--marker-rule, #f0a55899);
+  border-radius: 3px;
+  background: var(--marker-wash, #f0a55814);
+  opacity: 0.9;
+}
