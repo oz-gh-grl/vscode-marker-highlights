@@ -89,7 +89,10 @@ function getMarkers() {
     const color = typeof entry.color === 'string' && entry.color.trim()
       ? entry.color.trim()
       : DEFAULT_MARKERS[0].color;
-    markers.push({ tag, color, open: `[${tag}[`, close: `]${tag}]` });
+    const label = typeof entry.label === 'string' && entry.label.trim()
+      ? entry.label.trim()
+      : null;
+    markers.push({ tag, color, label, open: `[${tag}[`, close: `]${tag}]` });
   }
 
   // Longest tag first, so a short tag (e.g. "o") can't swallow the prefix of
@@ -98,6 +101,10 @@ function getMarkers() {
 
   cachedMarkers = markers;
   return markers;
+}
+
+function escapeAttr(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function hexAlpha(color, alphaHex) {
@@ -161,12 +168,22 @@ function markerRules(md) {
       const isEmpty = /^\s*$/.test(inner);
       const cls = isEmpty ? 'marker-note marker-empty' : 'marker-note';
       const style = markerStyle(openMatch.color);
+      // Attribution prefix (e.g. "Oz: "), only when the marker configures a
+      // `label` — opt-in, since existing markers without one render exactly
+      // as before. Both the empty-prompt placeholder and the label render
+      // via the same ::before pseudo-element, so an empty+labeled marker
+      // folds the label into the placeholder text rather than setting both
+      // attributes (only one `content` can win).
+      const labelPrefix = openMatch.label ? `${openMatch.label}: ` : '';
       const emptyAttr = isEmpty
-        ? ` data-empty-text="${openMatch.open}  ${openMatch.close}"`
+        ? ` data-empty-text="${escapeAttr(labelPrefix + openMatch.open)}  ${escapeAttr(openMatch.close)}"`
+        : '';
+      const labelAttr = (!isEmpty && openMatch.label)
+        ? ` data-label="${escapeAttr(openMatch.label)}"`
         : '';
 
       const token = state.push('html_inline', '', 0);
-      token.content = `<span class="${cls}" style="${style}"${emptyAttr}>`;
+      token.content = `<span class="${cls}" style="${style}"${emptyAttr}${labelAttr}>`;
       state.markerDepth = state.markerDepth || {};
       state.markerDepth[openMatch.tag] = (state.markerDepth[openMatch.tag] || 0) + 1;
       state.pos += openMatch.open.length;
@@ -207,13 +224,19 @@ function markerRules(md) {
     // continuation of an outer zone, again after it turns out to also open
     // a nested one), so this always overwrites rather than accumulates —
     // otherwise a second call would double up the class and style string.
-    const tagBlock = (token) => {
+    // `opener` marks the one block where a zone's *opening* marker actually
+    // landed, so only it gets the attribution label — not every block the
+    // zone happens to span.
+    const tagBlock = (token, opener) => {
       if (!stack.length) return;
       const marker = stack[stack.length - 1];
       const classes = (token.attrGet('class') || '').split(' ').filter(Boolean);
       if (!classes.includes('marker-zone')) classes.push('marker-zone');
       token.attrSet('class', classes.join(' '));
       token.attrSet('style', markerStyle(marker.color));
+      // attrSet, unlike the hand-built HTML string in pass 1, goes through
+      // markdown-it's own renderer escaping — do not escape again here.
+      if (opener && marker.label) token.attrSet('data-label', marker.label);
     };
 
     for (let i = 0; i < tokens.length; i++) {
@@ -221,7 +244,7 @@ function markerRules(md) {
 
       // Tag every top-level block that opens while a zone is active. The
       // opener's own block is tagged below, when the marker is found.
-      if (stack.length && token.nesting === 1) tagBlock(token);
+      if (stack.length && token.nesting === 1) tagBlock(token, false);
 
       if (token.type !== 'inline' || !token.children) continue;
 
@@ -262,7 +285,7 @@ function markerRules(md) {
       if (opensHere && i > 0) {
         for (let j = i - 1; j >= 0; j--) {
           if (tokens[j].nesting === 1) {
-            tagBlock(tokens[j]);
+            tagBlock(tokens[j], true);
             break;
           }
         }

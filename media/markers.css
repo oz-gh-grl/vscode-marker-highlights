@@ -34,6 +34,16 @@
   color: inherit;
 }
 
+/* A marker nested inside another marker's zone (different reviewer, or the
+   same reviewer nested inside their own zone) keeps its own accent color
+   rather than inheriting the outer zone's. Needs to outrank the `inherit`
+   rules above on specificity, not just source order, since it's easy for a
+   later edit to reorder rules and quietly reintroduce this bug. */
+.marker-zone .marker-note,
+.marker-zone .marker-zone {
+  color: var(--marker-fg, #f0a558);
+}
+
 /* Block-scale replies get a margin rule so a long one stays obvious
    when the opening marker has scrolled off the top of the pane. */
 .marker-zone {
@@ -67,6 +77,16 @@ li.marker-zone {
 ul.marker-zone,
 ol.marker-zone {
   padding-left: 2.75em;
+}
+
+/* Attribution prefix, e.g. "Oz: " — only drawn when a marker configures a
+   `label` (opt-in; markers without one render exactly as before). Set once,
+   at the opening of a note or the opening block of a zone — not repeated on
+   every block a zone spans — via data-label from extension.js. */
+[data-label]::before {
+  content: attr(data-label) ": ";
+  font-weight: 700;
+  opacity: 0.85;
 }
 
 /* An empty prompt — `[tag[ ]tag]` — wraps only whitespace, so without help

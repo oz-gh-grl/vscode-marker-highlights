@@ -39,6 +39,19 @@ Every tag listed is active at once — `[steve[ ... ]steve]` and
 `[ben[ ... ]ben]` can appear in the same document, each in its own color. If
 the setting is left unset, it defaults to a single `comment` tag in orange.
 
+Add an optional `label` to a marker to show attribution as a prefix (e.g.
+`Steve: `) at the start of each note and at the opening block of each zone —
+not repeated on every block a zone spans:
+
+```json
+"markerHighlight.markers": [
+  { "tag": "comment", "color": "#f0a558", "label": "Comment" },
+  { "tag": "steve", "color": "#4caf50", "label": "Steve" }
+]
+```
+
+Leave `label` off a tag to keep it color-only, as before.
+
 Changing the setting takes effect on the next preview render (edit the
 document, or use the preview pane's refresh button) — no window reload
 needed.
@@ -54,15 +67,20 @@ Markdown inside the markers still parses normally (emphasis, code spans,
 links), and the markers themselves are stripped from the output. A marker
 inside a code span or fenced block is left alone.
 
+Markers of different tags can nest — e.g. a `[steve[ ... ]steve]` aside
+inside a still-open `[comment[ ... ]comment]` zone — and each keeps its own
+color. When a block is covered by more than one open zone at once, it shows
+the innermost one's color.
+
 ## Install
 
 ```powershell
 npx --yes @vscode/vsce package
-code --install-extension marker-highlights-2.0.0.vsix
+code --install-extension marker-highlights-2.2.0.vsix
 ```
 
 Or, for a no-build install, copy this folder to
-`%USERPROFILE%\.vscode\extensions\marker-highlights-2.0.0\` and reload the
+`%USERPROFILE%\.vscode\extensions\marker-highlights-2.2.0\` and reload the
 window.
 
 ## Companion: highlighting in the editor

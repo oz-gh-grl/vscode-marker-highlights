@@ -193,3 +193,31 @@ still inside steve's zone
 > before the close reverts to comment-colored. If a block is covered by two
 > open zones at once, it shows the *innermost* one's color — a block can only
 > carry one left-rule/background at a time, so nesting doesn't stack colors.
+
+---
+
+## 14. Attribution labels
+
+Needs a `label` set on the tag's config entry (e.g.
+`{ "tag": "comment", "color": "#f0a558", "label": "Comment" }`) to see a
+prefix here — otherwise this case renders identically to case 1, just without
+the "Comment: " text.
+
+[comment[ note with attribution ]comment]
+
+[comment[ ]comment]
+
+> Expect: the first line reads "Comment: note with attribution" in comment's
+> color. The second, an empty prompt, folds the label into its dashed
+> placeholder instead of showing both — "Comment: [comment[  ]comment]".
+
+A zone only labels its opening block, not every block it spans:
+
+[comment[ zone with attribution, opening block
+
+second block, no repeated label
+
+]comment]
+
+> Expect: "Comment: " only prefixes "zone with attribution, opening block" —
+> not "second block, no repeated label".

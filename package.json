@@ -2,7 +2,7 @@
   "name": "marker-highlights",
   "displayName": "Marker Highlights",
   "description": "Highlights configurable [tag[ ... ]tag] inline/zone markers in the Markdown preview, with one color per tag.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "publisher": "oz",
   "author": "David E. Osorio",
   "license": "MIT",
@@ -32,6 +32,10 @@
               "color": {
                 "type": "string",
                 "description": "CSS color used to highlight this tag's markers, e.g. \"#f0a558\"."
+              },
+              "label": {
+                "type": "string",
+                "description": "Optional attribution shown as a prefix (e.g. \"Oz: \") at the start of each note and at the opening of each zone. Omit for no label."
               }
             }
           },
