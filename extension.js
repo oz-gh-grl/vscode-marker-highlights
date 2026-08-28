@@ -189,18 +189,31 @@ function markerRules(md) {
   // ---------------------------------------------------------------------
   // Runs after the `inline` core rule, so inline tokens already have their
   // children parsed and adjacent text fragments merged.
+  //
+  // Zones can nest (e.g. a `steve` zone opened inside a still-open `comment`
+  // zone), so the currently-open zones are tracked as a stack rather than a
+  // single value. A block covered by more than one open zone is styled with
+  // the innermost (most recently opened) one — same rule CSS uses for any
+  // overridden custom property, and simplest to reason about visually, since
+  // a block can only carry one left-rule/background at a time.
   md.core.ruler.push('marker_zones', (state) => {
     const markers = getMarkers();
     if (!markers.length) return;
 
     const tokens = state.tokens;
-    let active = null; // the marker whose zone is currently open, or null
+    const stack = []; // markers with a currently-open zone, innermost last
 
+    // Idempotent: a block can get tagged twice in one pass (once as a
+    // continuation of an outer zone, again after it turns out to also open
+    // a nested one), so this always overwrites rather than accumulates —
+    // otherwise a second call would double up the class and style string.
     const tagBlock = (token) => {
-      token.attrJoin('class', 'marker-zone');
-      const style = markerStyle(active.color);
-      const existing = token.attrGet('style');
-      token.attrSet('style', existing ? `${existing};${style}` : style);
+      if (!stack.length) return;
+      const marker = stack[stack.length - 1];
+      const classes = (token.attrGet('class') || '').split(' ').filter(Boolean);
+      if (!classes.includes('marker-zone')) classes.push('marker-zone');
+      token.attrSet('class', classes.join(' '));
+      token.attrSet('style', markerStyle(marker.color));
     };
 
     for (let i = 0; i < tokens.length; i++) {
@@ -208,37 +221,44 @@ function markerRules(md) {
 
       // Tag every top-level block that opens while a zone is active. The
       // opener's own block is tagged below, when the marker is found.
-      if (active && token.nesting === 1) tagBlock(token);
+      if (stack.length && token.nesting === 1) tagBlock(token);
 
       if (token.type !== 'inline' || !token.children) continue;
 
       let opensHere = false;
-      let closesHere = false;
 
       for (const child of token.children) {
         if (child.type !== 'text' || !child.content) continue;
 
-        if (!active) {
+        // A block can both open a new zone and close an outer one (or
+        // several markers at once), so keep scanning until nothing more
+        // matches rather than stopping at the first hit.
+        let changed = true;
+        while (changed) {
+          changed = false;
           for (const m of markers) {
             if (child.content.includes(m.open)) {
               child.content = child.content.split(m.open).join('');
-              active = m;
+              stack.push(m);
               opensHere = true;
-              break;
+              changed = true;
+            }
+            // A close only ever matches a marker that's actually open,
+            // closing the innermost matching one — proper LIFO nesting.
+            const openIdx = stack.lastIndexOf(m);
+            if (openIdx !== -1 && child.content.includes(m.close)) {
+              child.content = child.content.split(m.close).join('');
+              stack.splice(openIdx, 1);
+              changed = true;
             }
           }
-        }
-
-        if (active && child.content.includes(active.close)) {
-          child.content = child.content.split(active.close).join('');
-          closesHere = true;
         }
       }
 
       // Retro-tag the block that contains the opening marker: its
       // `*_open` token was emitted before we knew a zone started.
       // (Only on open: a continuation or closing block already got tagged
-      // by the `active` branch above.)
+      // by the `stack.length` branch above.)
       if (opensHere && i > 0) {
         for (let j = i - 1; j >= 0; j--) {
           if (tokens[j].nesting === 1) {
@@ -247,8 +267,6 @@ function markerRules(md) {
           }
         }
       }
-
-      if (closesHere) active = null;
     }
   });
 }

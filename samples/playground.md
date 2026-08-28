@@ -161,3 +161,35 @@ tag renders as plain literal text.
 [steve[ this is steve's note, in a different color if configured ]steve]
 
 > Expect: two distinctly colored runs, one per tag's configured color.
+
+---
+
+## 12. Nested markers, different tags, same paragraph
+
+[comment[ outer note starts here — [steve[ a nested aside ]steve] — and outer
+note continues ]comment]
+
+> Expect: the whole run starts in comment's color, the nested aside switches
+> to steve's color, and the text after it reverts to comment's color. This
+> works because each tag gets its own `<span>`, nested like any other inline
+> markup.
+
+---
+
+## 13. Nested markers, different tags, spanning blocks
+
+[comment[ this comment zone opens here
+
+[steve[ and a steve zone opens partway through, nested inside it
+
+still inside steve's zone
+
+]steve] back to just the comment zone
+
+]comment]
+
+> Expect: the first paragraph is comment-colored, the middle paragraphs
+> switch to steve-colored once steve's zone opens, and the last paragraph
+> before the close reverts to comment-colored. If a block is covered by two
+> open zones at once, it shows the *innermost* one's color — a block can only
+> carry one left-rule/background at a time, so nesting doesn't stack colors.
