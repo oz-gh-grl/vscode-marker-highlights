@@ -3,5 +3,4 @@
 node_modules/**
 test/**
 samples/**
-editor-highlight-settings.jsonc
 *.vsix

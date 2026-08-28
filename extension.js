@@ -51,6 +51,15 @@
  * The markers themselves are stripped from the output in both cases. Each
  * tag's color travels as an inline `style` attribute (CSS custom properties),
  * since the palette is only known at render time, not authoring time.
+ *
+ * EDITOR (SOURCE) DECORATIONS
+ * ----------------------------
+ * The preview only covers the rendered view. A second, independent piece
+ * (see "Editor decorations" below) reads the same `markerHighlight.markers`
+ * config and colors the raw `[tag[ ... ]tag]` text directly in the Markdown
+ * source editor via `TextEditorDecorationType`, so both views stay in sync
+ * from one config instead of needing a second, hand-maintained one (as a
+ * third-party regex-highlighter extension would require).
  */
 
 const DEFAULT_MARKERS = [{ tag: 'comment', color: '#f0a558' }];
@@ -294,12 +303,159 @@ function markerRules(md) {
   });
 }
 
-exports.activate = () => {
+// -------------------------------------------------------------------------
+// Editor decorations (Markdown SOURCE, not the rendered preview)
+// -------------------------------------------------------------------------
+// No block/inline distinction here — that's a markdown-it concept, and the
+// editor only sees raw text. A single regex pass per tag finds every
+// [tag[ ... ]tag] occurrence (an "instance"), and each instance gets three
+// decorations: the open bracket, the body, and the close bracket.
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findMarkerInstances(text, markers) {
+  const instances = [];
+  for (const marker of markers) {
+    const re = new RegExp(`${escapeRegExp(marker.open)}([\\s\\S]*?)${escapeRegExp(marker.close)}`, 'g');
+    let match;
+    while ((match = re.exec(text))) {
+      const openStart = match.index;
+      const openEnd = openStart + marker.open.length;
+      const bodyEnd = openEnd + match[1].length;
+      const closeEnd = bodyEnd + marker.close.length;
+      instances.push({ marker, openStart, openEnd, bodyEnd, closeEnd });
+    }
+  }
+  return instances;
+}
+
+// A marker nested inside another tag's body shouldn't get double-colored by
+// the outer marker's body decoration — carve the outer body into the
+// segments not covered by any directly nested instance, so the inner one's
+// own color shows through untouched (same outcome as the preview, where
+// nesting is native to the DOM).
+function bodySegments(instance, allInstances) {
+  const nested = allInstances
+    .filter((o) => o !== instance && o.openStart >= instance.openEnd && o.closeEnd <= instance.bodyEnd)
+    .sort((a, b) => a.openStart - b.openStart);
+
+  const segments = [];
+  let cursor = instance.openEnd;
+  for (const child of nested) {
+    if (child.openStart > cursor) segments.push([cursor, child.openStart]);
+    cursor = Math.max(cursor, child.closeEnd);
+  }
+  if (cursor < instance.bodyEnd) segments.push([cursor, instance.bodyEnd]);
+  return segments;
+}
+
+// Decoration types are recreated only when the config changes (see
+// invalidateDecorationTypes), not on every keystroke — disposing and
+// recreating them per edit would flicker the decorations.
+let decorationTypesByTag = new Map();
+
+function invalidateDecorationTypes() {
+  for (const types of decorationTypesByTag.values()) {
+    types.body.dispose();
+    types.punctuation.dispose();
+    if (types.label) types.label.dispose();
+  }
+  decorationTypesByTag = new Map();
+}
+
+function getDecorationTypes(vscode, marker) {
+  let types = decorationTypesByTag.get(marker.tag);
+  if (types) return types;
+
+  types = {
+    body: vscode.window.createTextEditorDecorationType({
+      color: marker.color
+    }),
+    punctuation: vscode.window.createTextEditorDecorationType({
+      color: hexAlpha(marker.color, '99'),
+      fontWeight: 'bold'
+    }),
+    label: marker.label
+      ? vscode.window.createTextEditorDecorationType({
+          before: { contentText: `${marker.label}: `, color: marker.color, fontWeight: 'bold' }
+        })
+      : null
+  };
+  decorationTypesByTag.set(marker.tag, types);
+  return types;
+}
+
+function updateEditorDecorations(vscode, editor) {
+  if (!editor || editor.document.languageId !== 'markdown') return;
+
+  const markers = getMarkers();
+  const doc = editor.document;
+  const text = doc.getText();
+  const instances = findMarkerInstances(text, markers);
+  const range = (start, end) => new vscode.Range(doc.positionAt(start), doc.positionAt(end));
+
+  const byTag = new Map(markers.map((m) => [m.tag, { punctuation: [], body: [], label: [] }]));
+
+  for (const instance of instances) {
+    const buckets = byTag.get(instance.marker.tag);
+    buckets.punctuation.push(range(instance.openStart, instance.openEnd));
+    buckets.punctuation.push(range(instance.bodyEnd, instance.closeEnd));
+    for (const [start, end] of bodySegments(instance, instances)) {
+      if (start < end) buckets.body.push(range(start, end));
+    }
+    if (instance.marker.label) {
+      buckets.label.push(range(instance.openStart, instance.openStart));
+    }
+  }
+
+  // Every configured marker gets a setDecorations call every update, even
+  // with an empty range list — that's what clears stale decorations for a
+  // tag that no longer appears in the (possibly just-edited) document.
+  for (const marker of markers) {
+    const types = getDecorationTypes(vscode, marker);
+    const buckets = byTag.get(marker.tag);
+    editor.setDecorations(types.punctuation, buckets.punctuation);
+    editor.setDecorations(types.body, buckets.body);
+    if (types.label) editor.setDecorations(types.label, buckets.label);
+  }
+}
+
+function activateEditorDecorations(vscode, context) {
+  const subscribe = (disposable) => {
+    if (context) context.subscriptions.push(disposable);
+  };
+
+  let debounceTimer = null;
+  const scheduleUpdate = (editor) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => updateEditorDecorations(vscode, editor), 150);
+  };
+
+  const updateAllVisible = () => {
+    for (const editor of vscode.window.visibleTextEditors) updateEditorDecorations(vscode, editor);
+  };
+
+  subscribe(vscode.window.onDidChangeActiveTextEditor((editor) => updateEditorDecorations(vscode, editor)));
+  subscribe(vscode.workspace.onDidChangeTextDocument((e) => {
+    const editor = vscode.window.visibleTextEditors.find((ed) => ed.document === e.document);
+    if (editor) scheduleUpdate(editor);
+  }));
+  subscribe(vscode.workspace.onDidChangeConfiguration((e) => {
+    if (!e.affectsConfiguration('markerHighlight.markers')) return;
+    invalidateMarkerCache();
+    invalidateDecorationTypes();
+    updateAllVisible();
+  }));
+
+  updateAllVisible();
+}
+
+exports.activate = (context) => {
   try {
     const vscode = require('vscode');
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('markerHighlight.markers')) invalidateMarkerCache();
-    });
+    activateEditorDecorations(vscode, context);
   } catch (err) {
     // Running outside the extension host (e.g. the standalone
     // test/render-check.js) — nothing to subscribe to.

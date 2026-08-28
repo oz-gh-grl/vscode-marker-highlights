@@ -1,8 +1,9 @@
 # Marker Highlights
 
-Highlights `[tag[ ... ]tag]` regions in the VS Code Markdown **preview**, where
-the tag and its color are configurable — so any number of reviewers can each
-get their own marker and color in the same document.
+Highlights `[tag[ ... ]tag]` regions in both the VS Code Markdown **preview**
+and the Markdown **source editor**, where the tag and its color are
+configurable — so any number of reviewers can each get their own marker and
+color in the same document, consistently in both views, from one config.
 
 ## The convention
 
@@ -52,11 +53,14 @@ not repeated on every block a zone spans:
 
 Leave `label` off a tag to keep it color-only, as before.
 
-Changing the setting takes effect on the next preview render (edit the
-document, or use the preview pane's refresh button) — no window reload
-needed.
+Both views pick up a config change on their next refresh: the preview on its
+next render (edit the document, or use the preview pane's refresh button),
+the source editor within about 150ms of an edit. Neither needs a window
+reload.
 
 ## What it does
+
+**Preview** (rendered Markdown):
 
 | Usage | Renders as |
 |---|---|
@@ -67,28 +71,30 @@ Markdown inside the markers still parses normally (emphasis, code spans,
 links), and the markers themselves are stripped from the output. A marker
 inside a code span or fenced block is left alone.
 
-Markers of different tags can nest — e.g. a `[steve[ ... ]steve]` aside
-inside a still-open `[comment[ ... ]comment]` zone — and each keeps its own
-color. When a block is covered by more than one open zone at once, it shows
-the innermost one's color.
+**Source editor** (raw Markdown text): the same `[tag[ ... ]tag]` text stays
+literally in the document (nothing is stripped, since this is source, not
+rendered output) — the brackets are dimmed and bolded, and the body between
+them is colored. Applies to any open Markdown editor automatically, no
+separate extension or hand-maintained regex needed.
+
+In both views, markers of different tags can nest — e.g. a
+`[steve[ ... ]steve]` aside inside a still-open `[comment[ ... ]comment]`
+zone/reply — and each keeps its own color rather than inheriting the outer
+one's. In the preview, if a block is covered by more than one open zone at
+once, it shows the innermost one's color; in the source editor, an outer
+marker's body coloring is carved around any nested marker so both colors
+show fully, without overlap.
 
 ## Install
 
 ```powershell
 npx --yes @vscode/vsce package
-code --install-extension marker-highlights-2.2.0.vsix
+code --install-extension marker-highlights-3.0.0.vsix
 ```
 
 Or, for a no-build install, copy this folder to
-`%USERPROFILE%\.vscode\extensions\marker-highlights-2.2.0\` and reload the
+`%USERPROFILE%\.vscode\extensions\marker-highlights-3.0.0\` and reload the
 window.
-
-## Companion: highlighting in the editor
-
-This extension only affects the **preview**. To get the same markers colored
-in the Markdown **source**, install `fabiospampinato.vscode-highlight` and
-adapt the regex rule documented in `editor-highlight-settings.jsonc` to your
-configured tags.
 
 ## Credits
 
