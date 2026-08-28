@@ -22,7 +22,7 @@ you just cloned:
 
 ```powershell
 npx --yes @vscode/vsce package
-code --install-extension marker-highlights-3.0.0.vsix
+code --install-extension marker-highlights-3.1.0.vsix
 ```
 
 The first command builds an installable package; the second installs it into

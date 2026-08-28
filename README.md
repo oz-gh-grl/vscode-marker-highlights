@@ -89,11 +89,11 @@ show fully, without overlap.
 
 ```powershell
 npx --yes @vscode/vsce package
-code --install-extension marker-highlights-3.0.0.vsix
+code --install-extension marker-highlights-3.1.0.vsix
 ```
 
 Or, for a no-build install, copy this folder to
-`%USERPROFILE%\.vscode\extensions\marker-highlights-3.0.0\` and reload the
+`%USERPROFILE%\.vscode\extensions\marker-highlights-3.1.0\` and reload the
 window.
 
 ## Credits
