@@ -42,7 +42,9 @@ the setting is left unset, it defaults to a single `comment` tag in orange.
 
 Add an optional `label` to a marker to show attribution as a prefix (e.g.
 `Steve: `) at the start of each note and at the opening block of each zone —
-not repeated on every block a zone spans:
+not repeated on every block a zone spans. This only affects the **preview**;
+the source editor is left to wrap normally, since the attribution there is
+already literal text you typed inside the marker:
 
 ```json
 "markerHighlight.markers": [

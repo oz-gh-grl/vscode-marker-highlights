@@ -360,11 +360,16 @@ function invalidateDecorationTypes() {
   for (const types of decorationTypesByTag.values()) {
     types.body.dispose();
     types.punctuation.dispose();
-    if (types.label) types.label.dispose();
   }
   decorationTypesByTag = new Map();
 }
 
+// No `label` decoration type here: a `before` content-text decoration
+// inserts a fake glyph into the editor's layout without being real
+// document text, which throws off the editor's line-wrap width
+// calculation. The label is preview-only (see markerRules' labelPrefix) —
+// in the source editor the attribution is already literal text the user
+// typed inside the marker, so nothing needs to be synthesized here.
 function getDecorationTypes(vscode, marker) {
   let types = decorationTypesByTag.get(marker.tag);
   if (types) return types;
@@ -376,12 +381,7 @@ function getDecorationTypes(vscode, marker) {
     punctuation: vscode.window.createTextEditorDecorationType({
       color: hexAlpha(marker.color, '99'),
       fontWeight: 'bold'
-    }),
-    label: marker.label
-      ? vscode.window.createTextEditorDecorationType({
-          before: { contentText: `${marker.label}: `, color: marker.color, fontWeight: 'bold' }
-        })
-      : null
+    })
   };
   decorationTypesByTag.set(marker.tag, types);
   return types;
@@ -396,7 +396,7 @@ function updateEditorDecorations(vscode, editor) {
   const instances = findMarkerInstances(text, markers);
   const range = (start, end) => new vscode.Range(doc.positionAt(start), doc.positionAt(end));
 
-  const byTag = new Map(markers.map((m) => [m.tag, { punctuation: [], body: [], label: [] }]));
+  const byTag = new Map(markers.map((m) => [m.tag, { punctuation: [], body: [] }]));
 
   for (const instance of instances) {
     const buckets = byTag.get(instance.marker.tag);
@@ -404,9 +404,6 @@ function updateEditorDecorations(vscode, editor) {
     buckets.punctuation.push(range(instance.bodyEnd, instance.closeEnd));
     for (const [start, end] of bodySegments(instance, instances)) {
       if (start < end) buckets.body.push(range(start, end));
-    }
-    if (instance.marker.label) {
-      buckets.label.push(range(instance.openStart, instance.openStart));
     }
   }
 
@@ -418,7 +415,6 @@ function updateEditorDecorations(vscode, editor) {
     const buckets = byTag.get(marker.tag);
     editor.setDecorations(types.punctuation, buckets.punctuation);
     editor.setDecorations(types.body, buckets.body);
-    if (types.label) editor.setDecorations(types.label, buckets.label);
   }
 }
 

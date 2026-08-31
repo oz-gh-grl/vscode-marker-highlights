@@ -2,7 +2,7 @@
   "name": "marker-highlights",
   "displayName": "Marker Highlights",
   "description": "Highlights configurable [tag[ ... ]tag] inline/zone markers in the Markdown preview and source editor, with one color per tag.",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "publisher": "oz",
   "author": "David E. Osorio",
   "license": "MIT",
