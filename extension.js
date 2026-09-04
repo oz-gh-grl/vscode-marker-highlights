@@ -419,7 +419,73 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Ranges of raw text that render as code (fenced code blocks and inline code
+// spans), where a `[tag[ ... ]tag]`-shaped run is just literal text about the
+// convention, not a live marker. The preview already gets this for free —
+// markdown-it tokenizes code spans/fences before marker_note ever sees them
+// (see processInline's non-text-child skip above) — but the editor side
+// works off raw text, so it needs its own (deliberately approximate, no
+// external parser is bundled — see .vscodeignore) pass to find the same
+// ranges.
+function computeCodeRanges(text) {
+  const ranges = [];
+
+  // 1. Fenced code blocks: ``` or ~~~, >=3 chars, up to 3 leading spaces,
+  // closed by a fence of the same character at least as long.
+  const lines = text.split('\n');
+  const lineStarts = [];
+  let offset = 0;
+  for (const line of lines) {
+    lineStarts.push(offset);
+    offset += line.length + 1;
+  }
+
+  const fenceOpenRe = /^ {0,3}(`{3,}|~{3,})/;
+  let i = 0;
+  while (i < lines.length) {
+    const m = fenceOpenRe.exec(lines[i]);
+    if (m) {
+      const fenceChar = m[1][0];
+      const fenceLen = m[1].length;
+      const fenceCloseRe = new RegExp(`^ {0,3}${fenceChar}{${fenceLen},}\\s*$`);
+      let j = i + 1;
+      while (j < lines.length && !fenceCloseRe.test(lines[j])) j++;
+      const endLine = j < lines.length ? j : lines.length - 1;
+      ranges.push([lineStarts[i], lineStarts[endLine] + lines[endLine].length]);
+      i = endLine + 1;
+    } else {
+      i++;
+    }
+  }
+
+  // 2. Inline code spans, outside the fenced ranges just found. Per
+  // CommonMark, a code span opens at a run of N backticks and closes at the
+  // next run of exactly N backticks — a run of a different length is just
+  // literal content of the still-open span, not a delimiter.
+  const inFencedRange = (pos) => ranges.some(([s, e]) => pos >= s && pos < e);
+  const backtickRunRe = /`+/g;
+  let pendingOpen = null;
+  let match;
+  while ((match = backtickRunRe.exec(text))) {
+    if (inFencedRange(match.index)) continue;
+    if (!pendingOpen) {
+      pendingOpen = { start: match.index, len: match[0].length };
+    } else if (match[0].length === pendingOpen.len) {
+      ranges.push([pendingOpen.start, match.index + match[0].length]);
+      pendingOpen = null;
+    }
+  }
+
+  ranges.sort((a, b) => a[0] - b[0]);
+  return ranges;
+}
+
+function overlapsAnyRange(start, end, ranges) {
+  return ranges.some(([s, e]) => start < e && end > s);
+}
+
 function findMarkerInstances(text, markers) {
+  const codeRanges = computeCodeRanges(text);
   const instances = [];
   for (const marker of markers) {
     const re = new RegExp(`${escapeRegExp(marker.open)}([\\s\\S]*?)${escapeRegExp(marker.close)}`, 'g');
@@ -429,6 +495,10 @@ function findMarkerInstances(text, markers) {
       const openEnd = openStart + marker.open.length;
       const bodyEnd = openEnd + match[1].length;
       const closeEnd = bodyEnd + marker.close.length;
+      // A marker written inside a code span or fenced block is someone
+      // writing *about* the convention, not a live marker — leave it plain,
+      // same as the preview does.
+      if (overlapsAnyRange(openStart, closeEnd, codeRanges)) continue;
       instances.push({ marker, openStart, openEnd, bodyEnd, closeEnd });
     }
   }
