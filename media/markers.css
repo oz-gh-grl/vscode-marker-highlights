@@ -60,13 +60,22 @@
   color: var(--marker-fg, #f0a558);
 }
 
-/* List items inherit the zone class from the core rule, but the <ul>/<ol>
-   around them already carries the rule — don't draw it twice. */
+/* A list item that opens a zone carries the rule itself: the marker landed
+   mid-list, so the surrounding <ul>/<ol> is *not* part of the zone and there
+   is nothing else to draw it. Unlike a paragraph it can't pull left with a
+   negative margin — that slides the text under the bullet — so it insets its
+   own content instead. */
 li.marker-zone {
+  padding: 0.15em 0 0.15em 0.5em;
+  margin-left: 0;
+}
+
+/* When the whole list is inside the zone, the <ul>/<ol> around it already
+   carries the rule — don't draw it again on every item. */
+.marker-zone > li.marker-zone {
   border-left: none;
   background: none;
   padding-left: 0;
-  margin-left: 0;
 }
 
 /* The `padding` shorthand on .marker-zone above resets padding-left to

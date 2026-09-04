@@ -45,8 +45,10 @@
  *   2. ZONE    — open and close are in *different* blocks, i.e. the reply
  *      runs across several paragraphs or a list. The inline rule declines
  *      those (no closing marker in its slice of source), and a core rule
- *      instead tags every block from the opener through the closer with
- *      `marker-zone`.
+ *      instead tags each block the zone covers *whole* with `marker-zone`.
+ *      A block the zone only covers part of — the bullet whose tail the
+ *      reply was opened in, say — gets a `marker-note` span around that
+ *      part alone, so the document's own text keeps its own voice.
  *
  * The markers themselves are stripped from the output in both cases. Each
  * tag's color travels as an inline `style` attribute (CSS custom properties),
@@ -216,6 +218,14 @@ function markerRules(md) {
   // Runs after the `inline` core rule, so inline tokens already have their
   // children parsed and adjacent text fragments merged.
   //
+  // A zone is only rendered as a *block* where it actually covers the whole
+  // block. Where it starts or ends partway through one — a reply opened at
+  // the tail of a checklist bullet, say, that then runs on for several
+  // paragraphs — only the covered stretch is wrapped, in the same
+  // `marker-note` span pass 1 emits. Tagging the whole block there would
+  // paint the document's own text in the reviewer's color and, worse, print
+  // the reviewer's attribution label in front of text they never wrote.
+  //
   // Zones can nest (e.g. a `steve` zone opened inside a still-open `comment`
   // zone), so the currently-open zones are tracked as a stack rather than a
   // single value. A block covered by more than one open zone is styled with
@@ -230,15 +240,13 @@ function markerRules(md) {
     const stack = []; // markers with a currently-open zone, innermost last
 
     // Idempotent: a block can get tagged twice in one pass (once as a
-    // continuation of an outer zone, again after it turns out to also open
-    // a nested one), so this always overwrites rather than accumulates —
+    // container inside an outer zone, again as the block that turns out to
+    // open a nested one), so this always overwrites rather than accumulates —
     // otherwise a second call would double up the class and style string.
     // `opener` marks the one block where a zone's *opening* marker actually
     // landed, so only it gets the attribution label — not every block the
     // zone happens to span.
-    const tagBlock = (token, opener) => {
-      if (!stack.length) return;
-      const marker = stack[stack.length - 1];
+    const tagBlock = (token, marker, opener) => {
       const classes = (token.attrGet('class') || '').split(' ').filter(Boolean);
       if (!classes.includes('marker-zone')) classes.push('marker-zone');
       token.attrSet('class', classes.join(' '));
@@ -248,57 +256,153 @@ function markerRules(md) {
       if (opener && marker.label) token.attrSet('data-label', marker.label);
     };
 
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
+    // Whether a token contributes anything visible. Used to decide whether a
+    // zone covers a block *entirely* (block treatment) or only part of it
+    // (span treatment); whitespace around the markers doesn't count as
+    // content, and neither do the empty placeholders below.
+    const blank = (token) =>
+      token.type === 'softbreak' ||
+      (token.type === 'text' && /^\s*$/.test(token.content)) ||
+      (token.type === 'html_inline' && token.content === '');
 
-      // Tag every top-level block that opens while a zone is active. The
-      // opener's own block is tagged below, when the marker is found.
-      if (stack.length && token.nesting === 1) tagBlock(token, false);
+    // Strips this block's markers, records the stretch each zone covers, and
+    // reports whether the block is covered whole. Marker boundaries can fall
+    // mid-text-node, so covered stretches are delimited by empty
+    // `html_inline` placeholders spliced in at those points: their content is
+    // filled in with a span later, once it is known whether this block wants
+    // spans or block treatment, without having to re-index anything.
+    const processInline = (token) => {
+      if (!token.children) return null;
 
-      if (token.type !== 'inline' || !token.children) continue;
+      const out = [];
+      const open = []; // stretches still open, outermost first
+      const stretches = [];
 
-      let opensHere = false;
+      const emit = (type, content, level) => {
+        const tok = new state.Token(type, '', 0);
+        tok.content = content;
+        tok.level = level;
+        out.push(tok);
+        return tok;
+      };
+
+      // Zones already open when the block starts cover it from its very
+      // first character, so their stretch begins ahead of any content.
+      for (const marker of stack) {
+        const openTok = emit('html_inline', '', 0);
+        open.push({ marker, openTok, start: out.length - 1, opensHere: false });
+      }
 
       for (const child of token.children) {
-        if (child.type !== 'text' || !child.content) continue;
+        // Non-text children (code spans, emphasis, pass 1's own spans) pass
+        // through untouched — that is what keeps a marker written inside
+        // `code` from being treated as a live one.
+        if (child.type !== 'text' || !child.content) { out.push(child); continue; }
 
-        // A block can both open a new zone and close an outer one (or
-        // several markers at once), so keep scanning until nothing more
-        // matches rather than stopping at the first hit.
-        let changed = true;
-        while (changed) {
-          changed = false;
-          for (const m of markers) {
-            if (child.content.includes(m.open)) {
-              child.content = child.content.split(m.open).join('');
-              stack.push(m);
-              opensHere = true;
-              changed = true;
-            }
+        let content = child.content;
+        while (content) {
+          // Earliest marker wins, so several markers in one text node are
+          // handled in source order rather than in per-marker order.
+          let hit = null;
+          for (const marker of markers) {
+            const openAt = content.indexOf(marker.open);
+            if (openAt !== -1 && (!hit || openAt < hit.at)) hit = { at: openAt, marker, opening: true };
             // A close only ever matches a marker that's actually open,
             // closing the innermost matching one — proper LIFO nesting.
-            const openIdx = stack.lastIndexOf(m);
-            if (openIdx !== -1 && child.content.includes(m.close)) {
-              child.content = child.content.split(m.close).join('');
-              stack.splice(openIdx, 1);
-              changed = true;
+            if (stack.includes(marker)) {
+              const closeAt = content.indexOf(marker.close);
+              if (closeAt !== -1 && (!hit || closeAt < hit.at)) hit = { at: closeAt, marker, opening: false };
             }
+          }
+          if (!hit) { emit('text', content, child.level); break; }
+
+          if (hit.at > 0) emit('text', content.slice(0, hit.at), child.level);
+          const boundary = emit('html_inline', '', child.level);
+
+          if (hit.opening) {
+            stack.push(hit.marker);
+            open.push({ marker: hit.marker, openTok: boundary, start: out.length - 1, opensHere: true });
+            content = content.slice(hit.at + hit.marker.open.length);
+          } else {
+            const onStack = stack.lastIndexOf(hit.marker);
+            if (onStack !== -1) stack.splice(onStack, 1);
+            let idx = -1;
+            for (let k = open.length - 1; k >= 0; k--) {
+              if (open[k].marker === hit.marker) { idx = k; break; }
+            }
+            if (idx !== -1) {
+              const stretch = open.splice(idx, 1)[0];
+              stretch.closeTok = boundary;
+              stretch.end = out.length - 1;
+              stretches.push(stretch);
+            }
+            content = content.slice(hit.at + hit.marker.close.length);
           }
         }
       }
 
-      // Retro-tag the block that contains the opening marker: its
-      // `*_open` token was emitted before we knew a zone started.
-      // (Only on open: a continuation or closing block already got tagged
-      // by the `stack.length` branch above.)
-      if (opensHere && i > 0) {
-        for (let j = i - 1; j >= 0; j--) {
-          if (tokens[j].nesting === 1) {
-            tagBlock(tokens[j], true);
-            break;
-          }
-        }
+      // Whatever is still open runs past the end of this block.
+      for (const stretch of open) {
+        stretch.closeTok = null;
+        stretch.end = out.length;
+        stretches.push(stretch);
       }
+
+      token.children = out;
+      if (!stretches.length) return { coverage: 'none' };
+
+      stretches.sort((a, b) => a.start - b.start || b.end - a.end); // outermost first
+      const covers = (stretch) =>
+        out.slice(0, stretch.start).every(blank) && out.slice(stretch.end + 1).every(blank);
+      const whole = stretches.filter(covers);
+
+      for (const stretch of stretches) {
+        // A stretch covering the whole block is drawn by the block itself, so
+        // its placeholders stay empty and render nothing.
+        if (whole.includes(stretch)) continue;
+        const label = stretch.opensHere && stretch.marker.label
+          ? ` data-label="${escapeAttr(stretch.marker.label)}"`
+          : '';
+        stretch.openTok.content = `<span class="marker-note" style="${markerStyle(stretch.marker.color)}"${label}>`;
+        if (stretch.closeTok) stretch.closeTok.content = '</span>';
+        else emit('html_inline', '</span>', 0); // stretch runs to the block's end
+      }
+
+      if (!whole.length) return { coverage: 'partial' };
+      // Innermost of the zones covering the block whole: only one left rule
+      // and background can be drawn, and the innermost is the nearest reply.
+      const inner = whole[whole.length - 1];
+      return { coverage: 'full', marker: inner.marker, opensHere: inner.opensHere };
+    };
+
+    // Block-open tokens seen since the last inline token. The innermost is
+    // the block the inline content actually belongs to (a `<p>`, a `<li>` in
+    // a tight list, a heading); anything outside it is a *container* — a list
+    // or blockquote wrapping several blocks — which belongs to the zone
+    // whenever the zone is already open where the container starts.
+    //
+    // `hidden` tokens are skipped: in a tight list markdown-it still emits a
+    // `paragraph_open` around each item's inline content but flags it hidden,
+    // so it renders no tag at all and a class set on it goes nowhere. The
+    // nearest *rendered* block is the `<li>`.
+    let pending = [];
+
+    for (const token of tokens) {
+      if (token.nesting === 1) {
+        if (!token.hidden) pending.push(token);
+        continue;
+      }
+      if (token.type !== 'inline') continue;
+
+      const block = pending.pop() || null;
+      if (stack.length) {
+        const innermost = stack[stack.length - 1];
+        for (const container of pending) tagBlock(container, innermost, false);
+      }
+      pending = [];
+
+      const info = processInline(token);
+      if (block && info && info.coverage === 'full') tagBlock(block, info.marker, info.opensHere);
     }
   });
 }

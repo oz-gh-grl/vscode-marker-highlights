@@ -32,6 +32,20 @@ that's my whole answer. ]comment]
 **Q4.** Inline mid-sentence works too — the answer here is [comment[ option B, with
 **bold** and `code` inside ]comment] and the sentence carries on afterward.
 
+## Zone opened inside a bullet
+
+**Q5.** A reply can open partway through a list item and run on for several
+paragraphs — the shape a checklist review produces.
+
+- `[~]` **Replace the donut with a bar chart.** Unconditional, so no threshold
+  to pin. [comment[ **Unblocked** — the measures this needed did not exist. The
+  donut was an `image` visual bound to a single measure.
+
+Extracted into seven real measures, so the replacement and the donut agree by
+construction.
+
+That's the whole answer. ]comment]
+
 ## Not highlighted (by design)
 
 Writing *about* the convention uses a code span, so `[comment[ ... ]comment]` stays plain.

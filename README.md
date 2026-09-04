@@ -67,7 +67,10 @@ reload.
 | Usage | Renders as |
 |---|---|
 | Open and close in the same paragraph | inline `<span class="marker-note">`, colored text |
-| Open and close in different blocks | every block between them gets `marker-zone` — colored text plus a left rule |
+| Open and close in different blocks | every block they cover whole gets `marker-zone` — colored text plus a left rule |
+| A block they cover only partly | that stretch alone gets a `marker-note` span, as if it had been written inline |
+
+That split matters when a reply is opened partway through a block — at the tail of a checklist bullet, say — and then runs on for several paragraphs. Only the reply is colored: the bullet's own text stays in the document's voice, and the attribution label (if the tag configures one) sits where the reply actually starts rather than in front of words the reviewer never wrote. The paragraphs that follow are covered whole, so they get the block treatment.
 
 Markdown inside the markers still parses normally (emphasis, code spans,
 links), and the markers themselves are stripped from the output. A marker
